@@ -174,131 +174,131 @@ def launch(config, print_fn):
     # ----------------------------------------------------------------------- #
     # Optimization
     # ----------------------------------------------------------------------- #
-    # def step_trn(state, batch, config, scheduler, dynamic_scale):
+    def step_trn(state, batch, config, scheduler, dynamic_scale):
 
-    #     def _global_norm(updates):
-    #         return jnp.sqrt(sum([jnp.sum(jnp.square(e))
-    #                              for e in jax.tree_util.tree_leaves(updates)]))
+        def _global_norm(updates):
+            return jnp.sqrt(sum([jnp.sum(jnp.square(e))
+                                 for e in jax.tree_util.tree_leaves(updates)]))
         
-    #     def _clip_by_global_norm(updates, global_norm):
-    #         return jax.tree_util.tree_map(
-    #             lambda e: jnp.where(
-    #                 global_norm < config.optim_global_clipping, e,
-    #                 (e / global_norm) * config.optim_global_clipping), updates)
+        def _clip_by_global_norm(updates, global_norm):
+            return jax.tree_util.tree_map(
+                lambda e: jnp.where(
+                    global_norm < config.optim_global_clipping, e,
+                    (e / global_norm) * config.optim_global_clipping), updates)
         
-    #     # define loss function
-    #     def loss_fn(params):
+        # define loss function
+        def loss_fn(params):
 
-    #         # get features
-    #         output, new_model_state = model.apply({
-    #             'params': jax.tree_util.tree_map(
-    #                 lambda e1, e2: jnp.multiply(e1, e2),
-    #                 params['ext'], state.params_mask['ext']),
-    #             'batch_stats': state.batch_stats,
-    #             'image_stats': state.image_stats}, batch['images'] / 255.0,
-    #             mutable='batch_stats', use_running_average=False)
+            # get features
+            output, new_model_state = model.apply({
+                'params': jax.tree_util.tree_map(
+                    lambda e1, e2: jnp.multiply(e1, e2),
+                    params['ext'], state.params_mask['ext']),
+                'batch_stats': state.batch_stats,
+                'image_stats': state.image_stats}, batch['images'] / 255.0,
+                mutable='batch_stats', use_running_average=False)
 
-    #         # negative_log_likelihood
-    #         smooth = config.optim_label_smoothing
-    #         target = common_utils.onehot(batch['labels'], NUM_CLASSES)
-    #         target = (1.0 - smooth) * target + \
-    #             smooth * jnp.ones_like(target) / NUM_CLASSES
-    #         source = jax.nn.log_softmax(output @ params['cls'], axis=-1)
-    #         negative_log_likelihood = -jnp.sum(target * source, axis=-1)
-    #         negative_log_likelihood = jnp.mean(negative_log_likelihood)
+            # negative_log_likelihood
+            smooth = config.optim_label_smoothing
+            target = common_utils.onehot(batch['labels'], NUM_CLASSES)
+            target = (1.0 - smooth) * target + \
+                smooth * jnp.ones_like(target) / NUM_CLASSES
+            source = jax.nn.log_softmax(output @ params['cls'], axis=-1)
+            negative_log_likelihood = -jnp.sum(target * source, axis=-1)
+            negative_log_likelihood = jnp.mean(negative_log_likelihood)
 
-    #         # loss
-    #         loss = negative_log_likelihood
+            # loss
+            loss = negative_log_likelihood
 
-    #         # log metrics
-    #         metrics = OrderedDict({
-    #             'loss': loss,
-    #             'negative_log_likelihood': negative_log_likelihood})
-    #         return loss, (metrics, new_model_state)
+            # log metrics
+            metrics = OrderedDict({
+                'loss': loss,
+                'negative_log_likelihood': negative_log_likelihood})
+            return loss, (metrics, new_model_state)
 
-    #     # compute losses and gradients
-    #     if dynamic_scale:
-    #         dynamic_scale, is_fin, aux, grads = dynamic_scale.value_and_grad(
-    #             loss_fn, has_aux=True, axis_name='batch')(state.params)
-    #     else:
-    #         aux, grads = jax.value_and_grad(
-    #             loss_fn, has_aux=True)(state.params)
-    #         grads = jax.lax.pmean(grads, axis_name='batch')
+        # compute losses and gradients
+        if dynamic_scale:
+            dynamic_scale, is_fin, aux, grads = dynamic_scale.value_and_grad(
+                loss_fn, has_aux=True, axis_name='batch')(state.params)
+        else:
+            aux, grads = jax.value_and_grad(
+                loss_fn, has_aux=True)(state.params)
+            grads = jax.lax.pmean(grads, axis_name='batch')
 
-    #     # weight decay regularization in PyTorch-style
-    #     grads = jax.tree_util.tree_map(
-    #         lambda g, p: g + config.optim_weight_decay * p,
-    #         grads, state.params)
+        # weight decay regularization in PyTorch-style
+        grads = jax.tree_util.tree_map(
+            lambda g, p: g + config.optim_weight_decay * p,
+            grads, state.params)
         
-    #     # mask gradients
-    #     grads = jax.tree_util.tree_map(
-    #         lambda e1, e2: jnp.multiply(e1, e2),
-    #         grads, state.params_mask)
+        # mask gradients
+        grads = jax.tree_util.tree_map(
+            lambda e1, e2: jnp.multiply(e1, e2),
+            grads, state.params_mask)
 
-    #     # compute norms of weights and gradients
-    #     w_norm = _global_norm(state.params)
-    #     g_norm = _global_norm(grads)
-    #     if config.optim_global_clipping:
-    #         grads = _clip_by_global_norm(grads, g_norm)
+        # compute norms of weights and gradients
+        w_norm = _global_norm(state.params)
+        g_norm = _global_norm(grads)
+        if config.optim_global_clipping:
+            grads = _clip_by_global_norm(grads, g_norm)
 
-    #     # get auxiliaries
-    #     metrics = jax.lax.pmean(aux[1][0], axis_name='batch')
-    #     metrics['w_norm'] = w_norm
-    #     metrics['g_norm'] = g_norm
-    #     metrics['lr'] = scheduler(state.step)
+        # get auxiliaries
+        metrics = jax.lax.pmean(aux[1][0], axis_name='batch')
+        metrics['w_norm'] = w_norm
+        metrics['g_norm'] = g_norm
+        metrics['lr'] = scheduler(state.step)
 
-    #     # update train state
-    #     new_state = state.apply_gradients(
-    #         grads=grads, batch_stats=aux[1][1]['batch_stats'])
-    #     if dynamic_scale:
-    #         new_state = new_state.replace(
-    #             opt_state=jax.tree_util.tree_map(
-    #                 partial(jnp.where, is_fin),
-    #                 new_state.opt_state, state.opt_state),
-    #             params=jax.tree_util.tree_map(
-    #                 partial(jnp.where, is_fin),
-    #                 new_state.params, state.params))
-    #         metrics['dyn_scale'] = dynamic_scale.scale
+        # update train state
+        new_state = state.apply_gradients(
+            grads=grads, batch_stats=aux[1][1]['batch_stats'])
+        if dynamic_scale:
+            new_state = new_state.replace(
+                opt_state=jax.tree_util.tree_map(
+                    partial(jnp.where, is_fin),
+                    new_state.opt_state, state.opt_state),
+                params=jax.tree_util.tree_map(
+                    partial(jnp.where, is_fin),
+                    new_state.params, state.params))
+            metrics['dyn_scale'] = dynamic_scale.scale
         
-    #     # mask parameters
-    #     new_state = new_state.replace(
-    #         params=jax.tree_util.tree_map(
-    #             lambda e1, e2: jnp.multiply(e1, e2),
-    #             new_state.params, new_state.params_mask))
-    #     return new_state, metrics
+        # mask parameters
+        new_state = new_state.replace(
+            params=jax.tree_util.tree_map(
+                lambda e1, e2: jnp.multiply(e1, e2),
+                new_state.params, new_state.params_mask))
+        return new_state, metrics
     
-    # # define optimizer with scheduler
-    # if config.constant_lr:
-    #     scheduler = optax.constant_schedule(config.optim_lr)
-    # else:
-    #     scheduler = optax.join_schedules(
-    #         schedules=[
-    #             optax.linear_schedule(
-    #                 init_value       = 0.0,
-    #                 end_value        = config.optim_lr,
-    #                 transition_steps = math.floor(0.1 * config.optim_ni)),
-    #             optax.cosine_decay_schedule(
-    #                 init_value       = config.optim_lr,
-    #                 decay_steps      = math.floor(0.9 * config.optim_ni))
-    #         ], boundaries=[
-    #             math.floor(0.1 * config.optim_ni),
-    #         ])
-    # optimizer = optax.sgd(
-    #     scheduler, momentum=config.optim_momentum,
-    #     accumulator_dtype=model_dtype)
+    # define optimizer with scheduler
+    if config.constant_lr:
+        scheduler = optax.constant_schedule(config.optim_lr)
+    else:
+        scheduler = optax.join_schedules(
+            schedules=[
+                optax.linear_schedule(
+                    init_value       = 0.0,
+                    end_value        = config.optim_lr,
+                    transition_steps = math.floor(0.1 * config.optim_ni)),
+                optax.cosine_decay_schedule(
+                    init_value       = config.optim_lr,
+                    decay_steps      = math.floor(0.9 * config.optim_ni))
+            ], boundaries=[
+                math.floor(0.1 * config.optim_ni),
+            ])
+    optimizer = optax.sgd(
+        scheduler, momentum=config.optim_momentum,
+        accumulator_dtype=model_dtype)
 
-    # # build and replicate train state
-    # class TrainState(train_state.TrainState):
-    #     params_mask: Any = None
-    #     batch_stats: Any = None
-    #     image_stats: Any = None
+    # build and replicate train state
+    class TrainState(train_state.TrainState):
+        params_mask: Any = None
+        batch_stats: Any = None
+        image_stats: Any = None
 
-    # state = TrainState.create(
-    #     apply_fn=model.apply, params=params, tx=optimizer,
-    #     params_mask=params_mask,
-    #     batch_stats=variables['batch_stats'],
-    #     image_stats=variables['image_stats'])
-    # state = jax_utils.replicate(state)
+    state = TrainState.create(
+        apply_fn=model.apply, params=params, tx=optimizer,
+        params_mask=params_mask,
+        batch_stats=variables['batch_stats'],
+        image_stats=variables['image_stats'])
+    state = jax_utils.replicate(state)
 
     def apply_fn(images, state):
         return model.apply({
@@ -308,129 +308,125 @@ def launch(config, print_fn):
         }, images, use_running_average=True) @ state.params['cls']
     p_apply_fn = jax.pmap(apply_fn)
 
-    # # run optimization
-    # best_acc = 0.0
-    # p_step_trn = jax.pmap(partial(
-    #     step_trn, config=config, scheduler=scheduler), axis_name='batch')
-    # sync_batch_stats = jax.pmap(lambda x: jax.lax.pmean(x, 'x'), 'x')
+    # run optimization
+    best_acc = 0.0
+    p_step_trn = jax.pmap(partial(
+        step_trn, config=config, scheduler=scheduler), axis_name='batch')
+    sync_batch_stats = jax.pmap(lambda x: jax.lax.pmean(x, 'x'), 'x')
     
-    # if dynamic_scale:
-    #     dynamic_scale = jax_utils.replicate(dynamic_scale)
+    if dynamic_scale:
+        dynamic_scale = jax_utils.replicate(dynamic_scale)
 
-    # trn_metric = []
-    # for iter_idx in itertools.count(start=1):
+    trn_metric = []
+    for iter_idx in itertools.count(start=1):
         
-    #     # rendezvous
-    #     jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
+        # rendezvous
+        jax.random.normal(jax.random.PRNGKey(0), ()).block_until_ready()
 
-    #     # terminate training
-    #     if iter_idx == config.optim_ni + 1:
-    #         break
+        # terminate training
+        if iter_idx == config.optim_ni + 1:
+            break
 
-    #     # ------------------------------------------------------------------- #
-    #     # Train
-    #     # ------------------------------------------------------------------- #
-    #     log_str = '[Iter {:7d}/{:7d}] '.format(iter_idx, config.optim_ni)
+        # ------------------------------------------------------------------- #
+        # Train
+        # ------------------------------------------------------------------- #
+        log_str = '[Iter {:7d}/{:7d}] '.format(iter_idx, config.optim_ni)
 
-    #     batch = next(trn_iter)
-    #     state, metrics = p_step_trn(state, batch, dynamic_scale=dynamic_scale)
-    #     trn_metric.append(metrics)
+        batch = next(trn_iter)
+        state, metrics = p_step_trn(state, batch, dynamic_scale=dynamic_scale)
+        trn_metric.append(metrics)
 
-    #     if iter_idx % 1000 == 0:
-    #         trn_summarized, val_summarized, tst_summarized = {}, {}, {}
+        if iter_idx % 1000 == 0:
+            trn_summarized, val_summarized, tst_summarized = {}, {}, {}
             
-    #         trn_metric = common_utils.get_metrics(trn_metric)
-    #         trn_summarized = {f'trn/{k}': v for k, v in jax.tree_util.tree_map(
-    #             lambda e: e.mean(), trn_metric).items()}
-    #         trn_metric = []
+            trn_metric = common_utils.get_metrics(trn_metric)
+            trn_summarized = {f'trn/{k}': v for k, v in jax.tree_util.tree_map(
+                lambda e: e.mean(), trn_metric).items()}
+            trn_metric = []
 
-    #         log_str += ', '.join(
-    #             f'{k} {v:.3e}' for k, v in trn_summarized.items())
+            log_str += ', '.join(
+                f'{k} {v:.3e}' for k, v in trn_summarized.items())
 
-    #         # synchronize batch_stats across replicas
-    #         state = state.replace(
-    #             batch_stats=sync_batch_stats(state.batch_stats))
+            # synchronize batch_stats across replicas
+            state = state.replace(
+                batch_stats=sync_batch_stats(state.batch_stats))
 
-    #         # --------------------------------------------------------------- #
-    #         # Valid
-    #         # --------------------------------------------------------------- #
-    #         acc, nll, cnt = 0.0, 0.0, 0
-    #         for batch_idx, batch in enumerate(val_iter, start=1):
-    #             logits = p_apply_fn(batch['images'] / 255.0, state)
-    #             logits = logits.reshape(-1, NUM_CLASSES)
-    #             labels = batch['labels'].reshape(-1)
-    #             marker = batch['marker'].reshape(-1)
-    #             pre = jax.nn.log_softmax(logits, axis=-1)
-    #             acc += jnp.sum(jnp.where(marker, evaluate_acc(
-    #                 pre, labels, log_input=True, reduction='none'
-    #             ), marker))
-    #             nll += jnp.sum(jnp.where(marker, evaluate_nll(
-    #                 pre, labels, log_input=True, reduction='none'
-    #             ), marker))
-    #             cnt += jnp.sum(marker)
-    #             if batch_idx == val_steps_per_epoch:
-    #                 break
-    #         val_summarized['val/acc'] = acc / cnt
-    #         val_summarized['val/nll'] = nll / cnt
-    #         val_summarized['val/best_acc'] = max(
-    #             val_summarized['val/acc'], best_acc)
+            # --------------------------------------------------------------- #
+            # Valid
+            # --------------------------------------------------------------- #
+            acc, nll, cnt = 0.0, 0.0, 0
+            for batch_idx, batch in enumerate(val_iter, start=1):
+                logits = p_apply_fn(batch['images'] / 255.0, state)
+                logits = logits.reshape(-1, NUM_CLASSES)
+                labels = batch['labels'].reshape(-1)
+                marker = batch['marker'].reshape(-1)
+                pre = jax.nn.log_softmax(logits, axis=-1)
+                acc += jnp.sum(jnp.where(marker, evaluate_acc(
+                    pre, labels, log_input=True, reduction='none'
+                ), marker))
+                nll += jnp.sum(jnp.where(marker, evaluate_nll(
+                    pre, labels, log_input=True, reduction='none'
+                ), marker))
+                cnt += jnp.sum(marker)
+                if batch_idx == val_steps_per_epoch:
+                    break
+            val_summarized['val/acc'] = acc / cnt
+            val_summarized['val/nll'] = nll / cnt
+            val_summarized['val/best_acc'] = max(
+                val_summarized['val/acc'], best_acc)
 
-    #         log_str += ', '
-    #         log_str += ', '.join(
-    #             f'{k} {v:.3e}' for k, v in val_summarized.items())
+            log_str += ', '
+            log_str += ', '.join(
+                f'{k} {v:.3e}' for k, v in val_summarized.items())
 
-    #         # --------------------------------------------------------------- #
-    #         # Save
-    #         # --------------------------------------------------------------- #
-    #         if config.periodic_ckpt:
+            # --------------------------------------------------------------- #
+            # Save
+            # --------------------------------------------------------------- #
+            if config.periodic_ckpt:
 
-    #             curr_ckpt = {
-    #                 'params': state.params,
-    #                 'params_mask': state.params_mask,
-    #                 'batch_stats': state.batch_stats,
-    #                 'image_stats': state.image_stats}
-    #             curr_ckpt = jax.device_get(
-    #                 jax.tree_util.tree_map(lambda x: x[0], curr_ckpt))
+                curr_ckpt = {
+                    'params': state.params,
+                    'params_mask': state.params_mask,
+                    'batch_stats': state.batch_stats,
+                    'image_stats': state.image_stats}
+                curr_ckpt = jax.device_get(
+                    jax.tree_util.tree_map(lambda x: x[0], curr_ckpt))
                 
-    #             if config.save:
-    #                 curr_path = os.path.join(
-    #                     config.save, f'iter_{iter_idx:06d}.ckpt')
-    #                 with GFile(curr_path, 'wb') as fp:
-    #                     fp.write(serialization.to_bytes(curr_ckpt))
+                if config.save:
+                    curr_path = os.path.join(
+                        config.save, f'iter_{iter_idx:06d}.ckpt')
+                    with GFile(curr_path, 'wb') as fp:
+                        fp.write(serialization.to_bytes(curr_ckpt))
 
-    #         if best_acc < val_summarized['val/acc']:
+            if best_acc < val_summarized['val/acc']:
 
-    #             log_str += ' (best_acc: {:.3e} -> {:.3e})'.format(
-    #                 best_acc, val_summarized['val/acc'])
-    #             best_acc = val_summarized['val/acc']
+                log_str += ' (best_acc: {:.3e} -> {:.3e})'.format(
+                    best_acc, val_summarized['val/acc'])
+                best_acc = val_summarized['val/acc']
 
-    #             best_ckpt = {
-    #                 'params': state.params,
-    #                 'params_mask': state.params_mask,
-    #                 'batch_stats': state.batch_stats,
-    #                 'image_stats': state.image_stats}
-    #             best_ckpt = jax.device_get(
-    #                 jax.tree_util.tree_map(lambda x: x[0], best_ckpt))
+                best_ckpt = {
+                    'params': state.params,
+                    'params_mask': state.params_mask,
+                    'batch_stats': state.batch_stats,
+                    'image_stats': state.image_stats}
+                best_ckpt = jax.device_get(
+                    jax.tree_util.tree_map(lambda x: x[0], best_ckpt))
 
-    #             if config.save:
-    #                 best_path = os.path.join(config.save, 'best_acc.ckpt')
-    #                 with GFile(best_path, 'wb') as fp:
-    #                     fp.write(serialization.to_bytes(best_ckpt))
+                if config.save:
+                    best_path = os.path.join(config.save, 'best_acc.ckpt')
+                    with GFile(best_path, 'wb') as fp:
+                        fp.write(serialization.to_bytes(best_ckpt))
                 
-    #         # logging current iteration
-    #         print_fn(log_str)
+            # logging current iteration
+            print_fn(log_str)
 
-    #         # terminate training if loss is nan
-    #         if jnp.isnan(trn_summarized['trn/loss']):
-    #             break
+            # terminate training if loss is nan
+            if jnp.isnan(trn_summarized['trn/loss']):
+                break
 
     # --------------------------------------------------------------- #
     # ImageNetV2
     # --------------------------------------------------------------- #
-    from flax.training import checkpoints
-    best_ckpt = checkpoints.restore_checkpoint(
-        f'./save/imagenet2012/IMP-LTR/{config.seed:03d}/best_acc.ckpt', target=None)
-
     best_ckpt = jax_utils.replicate(best_ckpt)
     best_params = namedtuple(
         'best_params', ['params', 'batch_stats', 'image_stats']

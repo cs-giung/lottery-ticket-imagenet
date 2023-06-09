@@ -128,7 +128,8 @@ def launch(config, print_fn):
 
         # only the kernel parameters of convolutional layers will be pruned
         params_to_be_pruned = jax.tree_util.tree_map(
-            jnp.ones_like if len(e.shape) == 4 else jnp.zeros_like,
+            lambda e: jnp.ones_like(e) \
+            if len(e.shape) == 4 else jnp.zeros_like(e),
             previous_ckpt['params'])
 
         # compute numbers

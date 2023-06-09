@@ -1,16 +1,21 @@
 # Lottery Ticket Hypothesis on ImageNet
 
-## Command lines
-
-To establish a rewind point, we begin by training the model from a random initialization for 16k iterations. During this training phase, we employ the SGD optimizer with a momentum of 0.9, weight decay of 0.0001, a mini-batch size of 2048, and a constant learning rate of 0.8. 
+## Requirements
+This projet is built on [giung2-dev](https://github.com/cs-giung/giung2-dev), which is available under the MIT license.
+```bash
+pip install git+https://github.com/cs-giung/giung2-dev.git
 ```
+
+## Command lines
+To establish a rewind point, we begin by training the model from a random initialization for 16k iterations. During this training phase, we employ the SGD optimizer with a momentum of 0.9, weight decay of 0.0001, a mini-batch size of 2048, and a constant learning rate of 0.8. 
+```bash
 python scripts/train.py
     --optim_ni=16000 --constant_lr=true --periodic_ckpt=true
     --mixed_precision=true --save=./save/imagenet2012/
 ```
 
 Afterwards, we employ a cosine decaying learning rate schedule over 48k iterations in each cycle of the IMP algorithm. Note that we should first train a dense model before the iterative pruning procedure.
-```
+```bash
 python scripts/train.py
     --optim_ni=48000
     --matching_ckpt=./save/imagenet2012/iter_016000.ckpt
@@ -20,7 +25,7 @@ python scripts/train.py
 
 
 During this iterative pruning phase, we employ a fixed pruning ratio of 0.8, meaning that 80% of the existing weights are retained while the remaining 20% are pruned.
-```
+```bash
 python scripts/train.py
     --optim_ni=48000 --pruning_ratio=0.8
     --matching_ckpt=./save/imagenet2012/iter_016000.ckpt

@@ -1,12 +1,43 @@
 # Lottery Ticket Hypothesis on ImageNet
 
+## Command lines
+
+To establish a rewind point, we begin by training the model from a random initialization for 16k iterations. During this training phase, we employ the SGD optimizer with a momentum of 0.9, weight decay of 0.0001, a mini-batch size of 2048, and a constant learning rate of 0.8. 
+```
+python scripts/train.py
+    --optim_ni=16000 --constant_lr=true --periodic_ckpt=true
+    --mixed_precision=true --save=./save/imagenet2012/
+```
+
+Afterwards, we employ a cosine decaying learning rate schedule over 48k iterations in each cycle of the IMP algorithm. Note that we should first train a dense model before the iterative pruning procedure.
+```
+python scripts/train.py
+    --optim_ni=48000
+    --matching_ckpt=./save/imagenet2012/iter_016000.ckpt
+    --previous_ckpt=./save/imagenet2012/iter_016000.ckpt
+    --mixed_precision=true --save=./save/imagenet2012/000/
+```
+
+
+During this iterative pruning phase, we employ a fixed pruning ratio of 0.8, meaning that 80% of the existing weights are retained while the remaining 20% are pruned.
+```
+python scripts/train.py
+    --optim_ni=48000 --pruning_ratio=0.8
+    --matching_ckpt=./save/imagenet2012/iter_016000.ckpt
+    --previous_ckpt=./save/imagenet2012/000/best_acc.ckpt
+    --mixed_precision=true --save=./save/imagenet2012/001/
+
+python scripts/train.py
+    --optim_ni=48000 --pruning_ratio=0.8
+    --matching_ckpt=./save/imagenet2012/iter_016000.ckpt
+    --previous_ckpt=./save/imagenet2012/001/best_acc.ckpt
+    --mixed_precision=true --save=./save/imagenet2012/002/
+
+(...)
+```
+
 ## Results
-
-__Iterative magnitude pruning with weight rewinding.__
-To establish a rewind point, we begin by training the model from a random initialization for 16k iterations. During this training phase, we employ the SGD optimizer with a momentum of 0.9, weight decay of 0.0001, a mini-batch size of 2048, and a constant learning rate of 0.8. Afterwards, we employ a cosine decaying learning rate schedule over 48k iterations in each cycle of the IMP algorithm. During this iterative pruning phase, we employ a fixed pruning ratio of 0.8, meaning that 80% of the existing weights are retained while the remaining 20% are pruned. All training runs are performed using mixed precision training on eight TPUv3 cores.1
-
-__Pruning convolutional weights.__
-We focus solely on applying pruning to the convolutional layer, while leaving the batch normalization and fully-connected layers unpruned. This means that the batch normalization layers consistently have 53,120 affine parameters and 53,120 buffers. As for the fully-connected layer, it comprises 2,048,000 parameters.
+All training runs are performed using mixed precision training on eight TPUv3 cores.
 
 | Cycle | # Params (Conv)   | IN    | IN-V2 | IN-R  | IN-A  | IN-S  |
 | :-:   | -:                | :-:   | :-:   | :-:   | :-:   | :-:   |
